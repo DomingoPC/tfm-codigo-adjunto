@@ -1,0 +1,1839 @@
+---
+title: "Gráficas definitivas en R"
+author: "Domingo Parrales de la Cruz"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r include=FALSE}
+library(ggplot2)
+theme_set(theme_bw() +
+            theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) 
+        )
+      )
+
+library(patchwork)
+library(scales)
+
+library(dplyr)
+library(forcats) # fct_recode
+library(tidyverse)
+
+library(lubridate) # Dates
+library(readr)
+
+library(naniar) # NAs
+
+library(sf) # Datos espaciales
+library(rnaturalearth) # world dataset (england)
+
+# Funciones auxiliares
+source('funciones_auxiliares.R')
+```
+
+# Frecuencia de casos
+
+Se clasifica además en función del tipo de vivienda y del tipo de tenencia de los inquilinos.
+
+```{r}
+# Load all entries of the following variables
+ppd <- load_variable('PPD.Category.Type', with_year = T)
+property.type <- load_variable('Property.Type', with_year = F)
+
+combine <- cbind(ppd, property.type)
+remove(ppd, property.type)
+
+# A: standard price
+a <- combine %>%
+  group_by(year, PPD.Category.Type, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>% 
+  filter(PPD.Category.Type == "A") %>% 
+  ungroup() %>% 
+  dplyr::select(-all_of(c("PPD.Category.Type"))) %>%
+  pivot_longer(cols = -year,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p1 <- a %>% 
+  mutate(across(c(year), factor)) %>% 
+  ggplot(aes(y=year, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) 
+
+
+total_a <- combine %>%
+  dplyr::select(-year) %>% 
+  group_by(PPD.Category.Type, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>%
+  filter(PPD.Category.Type == "A") %>%
+  ungroup() %>%
+  pivot_longer(cols = -PPD.Category.Type,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p2 <- total_a %>% 
+  mutate(across(c(PPD.Category.Type), factor)) %>% 
+  ggplot(aes(y=PPD.Category.Type, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Tipo de propiedad",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        # axis.text.y=element_blank(),  #remove y axis labels
+        # axis.ticks.y=element_blank(),  #remove y axis ticks
+        axis.title.x=element_blank()
+        ) +
+    theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# B: additional price
+b <- combine %>%
+  group_by(year, PPD.Category.Type, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>% 
+  filter(PPD.Category.Type == "B") %>% 
+  ungroup() %>% 
+  dplyr::select(-all_of(c("PPD.Category.Type"))) %>%
+  pivot_longer(cols = -year,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+b <- merge(x=a %>% dplyr::select(-Count), y=b, by = c("year", "Property_Type")) # ensure all years appear
+
+p3 <- b %>% 
+  mutate(across(c(year), factor)) %>% 
+  ggplot(aes(y=year, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  # scale_y_discrete(drop = FALSE) +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+
+total_b <- combine %>%
+  dplyr::select(-year) %>% 
+  group_by(PPD.Category.Type, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>%
+  filter(PPD.Category.Type == "B") %>%
+  ungroup() %>%
+  pivot_longer(cols = -PPD.Category.Type,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p4 <- total_b %>% 
+  mutate(across(c(PPD.Category.Type), factor)) %>% 
+  ggplot(aes(y=PPD.Category.Type, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        # axis.text.y=element_blank(),  #remove y axis labels
+        # axis.ticks.y=element_blank(),  #remove y axis ticks
+        axis.title.x=element_blank()
+        ) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+
+# Get legend
+# https://stackoverflow.com/questions/12041042/how-to-plot-just-the-legends-in-ggplot2
+library(grid)
+library(gridExtra)
+
+legend <- cowplot::get_legend(p2)
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+layout <- "
+ACE
+BDE
+BDE
+BDE
+BDE
+BDE
+BDE
+BDE
+"
+
+plot_save <- p2 + theme(legend.position="none") + xlab("") + ylab("") + 
+  labs(title="Precio estándar") +
+  scale_y_discrete(labels = c("Global")) +
+  
+  p1 + theme(legend.position="none") + xlab("Frecuencia relativa") + ylab("Año") + 
+  scale_y_discrete(breaks = seq(1995, 2023, by = 2)) +
+  scale_x_continuous(labels = scales::percent) +
+  
+  p4 + theme(legend.position="none") + xlab("") + ylab("") +
+  labs(title="Precio adicional") +
+  scale_y_discrete(labels = c("Global")) +
+  
+  p3 + theme(legend.position="none") + xlab("Frecuencia relativa") + ylab("") +
+  scale_y_discrete(breaks = as.factor(seq(1995, 2023, by = 2)), limits = as.factor(seq(1995, 2023, by = 1))) +
+  scale_x_continuous(labels = scales::percent) +
+  
+  legend +
+  plot_layout(design = layout)
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/PPD1.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+# Load all entries of the following variables
+Old.New <- load_variable('Old.New', with_year = T)
+property.type <- load_variable('Property.Type', with_year = F)
+
+combine <- cbind(Old.New, property.type)
+remove(Old.New, property.type)
+
+# A: standard price
+a <- combine %>%
+  group_by(year, Old.New, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>% 
+  filter(Old.New == "Segunda_mano") %>% 
+  ungroup() %>% 
+  dplyr::select(-all_of(c("Old.New"))) %>%
+  pivot_longer(cols = -year,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p1 <- a %>% 
+  mutate(across(c(year), factor)) %>% 
+  ggplot(aes(y=year, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Tipo de propiedad",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+
+total_a <- combine %>%
+  dplyr::select(-year) %>% 
+  group_by(Old.New, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>%
+  filter(Old.New == "Segunda_mano") %>%
+  ungroup() %>%
+  pivot_longer(cols = -Old.New,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p2 <- total_a %>% 
+  mutate(across(c(Old.New), factor)) %>% 
+  ggplot(aes(y=Old.New, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        # axis.text.y=element_blank(),  #remove y axis labels
+        # axis.ticks.y=element_blank(),  #remove y axis ticks
+        axis.title.x=element_blank()
+        ) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# B: additional price
+b <- combine %>%
+  group_by(year, Old.New, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>% 
+  filter(Old.New == "Nuevo") %>% 
+  ungroup() %>% 
+  dplyr::select(-all_of(c("Old.New"))) %>%
+  pivot_longer(cols = -year,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+b <- merge(x=a %>% dplyr::select(-Count), y=b, by = c("year", "Property_Type")) # ensure all years appear
+
+p3 <- b %>% 
+  mutate(across(c(year), factor)) %>% 
+  ggplot(aes(y=year, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  # scale_y_discrete(drop = FALSE) +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+
+total_b <- combine %>%
+  dplyr::select(-year) %>% 
+  group_by(Old.New, Property.Type) %>%
+  summarise(count = n()) %>%
+  tidyr::spread(Property.Type, count, fill = 0) %>%
+  filter(Old.New == "Nuevo") %>%
+  ungroup() %>%
+  pivot_longer(cols = -Old.New,       # Exclude 'Year' from being reshaped
+               names_to = "Property_Type",  # New column with the property types
+               values_to = "Count")         # Values corresponding to the property counts
+
+p4 <- total_b %>% 
+  mutate(across(c(Old.New), factor)) %>% 
+  ggplot(aes(y=Old.New, x=Count, fill=Property_Type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual("Property Type",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        # axis.text.y=element_blank(),  #remove y axis labels
+        # axis.ticks.y=element_blank(),  #remove y axis ticks
+        axis.title.x=element_blank()
+        ) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+
+# Get legend
+# https://stackoverflow.com/questions/12041042/how-to-plot-just-the-legends-in-ggplot2
+library(grid)
+library(gridExtra)
+
+legend <- cowplot::get_legend(p2)
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+layout <- "
+ACE
+BDE
+BDE
+BDE
+BDE
+BDE
+BDE
+BDE
+"
+
+plot_save <- p2 + theme(legend.position="none") + ylab("") + labs(title="Segunda mano") +
+  scale_y_discrete(labels = c("Global")) +
+  
+  p1 + theme(legend.position="none") + xlab("Frecuencia") + ylab("Año") + 
+  scale_y_discrete(breaks = seq(1995, 2023, by = 2)) +
+  scale_x_continuous(labels = scales::percent) +
+  
+  p4 + theme(legend.position="none") + ylab("") + labs(title="Nueva") +
+  scale_y_discrete(labels = c("Global")) +
+  
+  p3 + theme(legend.position="none") + xlab("Frecuencia") + ylab("") +
+  scale_y_discrete(breaks = as.factor(seq(1995, 2023, by = 2)), limits = as.factor(seq(1995, 2023, by = 1))) +
+  scale_x_continuous(labels = scales::percent) +
+  
+  legend + 
+  plot_layout(design = layout)
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/proporciones_old_new.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+
+# Frecuencia en función de si se pagan tasas adicionales
+
+```{r}
+duration <- as.matrix(load_variable('Duration', with_year = F))
+property.type <- as.matrix(load_variable('Property.Type', with_year = F))
+```
+
+```{r}
+# Tabla de contingencia
+contingency_table <- table(duration, property.type)
+
+duration_property.type_df <- as.data.frame(
+  margin.table(contingency_table, c(1,2))
+)
+colnames(duration_property.type_df) <- c('Duration', 'Property.Type', 'Freq')
+```
+
+```{r}
+plot_save <- duration_property.type_df %>% 
+  mutate(side=sqrt(Freq / max(Freq))) %>% 
+  
+  ggplot(aes(factor(Property.Type, levels=c('Unifamiliar', 
+                                            'Piso/Apartamento', 
+                                            'Semi-adosado', 
+                                            'Adosado', 
+                                            'Otro')), 
+             factor(Duration, levels=c('Desconocido', "Alquiler", "Propiedad")), # Example levels for Duration
+             width=side, height=side,
+             fill=Property.Type)) +
+  geom_tile() +
+  coord_fixed(ratio=1) +
+  
+  scale_fill_manual("Tipo de vivienda",
+                  values = c('Unifamiliar'='coral',
+                             'Piso/Apartamento'='cadetblue3',
+                             'Semi-adosado'='darkolivegreen3',
+                             'Adosado'='seagreen',
+                             'Otro'='purple2')) +
+  theme(legend.position = "none") + # no hace falta leyenda, los colores son los valores del eje y
+  
+  scale_x_discrete("Tipo de vivienda") +
+  scale_y_discrete("Tipo de tenencia de los inquilinos") +
+  labs(title="Relación entre el tipo de vivienda y el tipo de tenencia") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/tipo_vivienda_vs_tenencia.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+# Evolución del precio según las categorías
+```{r}
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(scales)
+```
+
+```{r}
+input_path <- "../output/R"
+data <- readr::read_csv(paste(input_path, "/evolucion.csv", sep=""))
+head(data)
+```
+
+Cálculo del intervalo de confianza según 
+$$  CI = \bar{X} \pm Z\cdot\frac{\sigma}{\sqrt{n}},  $$
+
+siendo:
+
++ $\bar{X}$ el valor medio de cada grupo.
+
++ $Z$ el Z-score para el nivel de confianza deseado (el valor tabulado para un CI del 95% es 1.96). https://mathblog.com/statistics/definitions/z-score/ci/
+
++ $\sigma$ la desviación estándar de Price.
+
++ $n$ el número de elementos en cada grupo.
+
+```{r}
+# https://groups.google.com/g/ggplot2/c/a_xhMoQyxZ4/m/OQHLPGsRtAQJ
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # remove + sign (extra)
+  l <- gsub("\\+", "", l)
+  # return this as an expression
+  parse(text=l)
+}
+
+a <- fancy_scientific(123)
+a
+```
+
+```{r}
+z_score <- 1.96 # 95% CI
+
+g1 <- data %>% 
+  dplyr::select("date2", 'Property.Type', 'Price') %>% 
+  group_by(date2, Property.Type) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=Property.Type)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=Property.Type),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_y_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks()
+  ) +
+  scale_x_date(date_breaks='5 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Tipo de vivienda",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  scale_fill_manual("Tipo de vivienda",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+g2 <- data %>% 
+  dplyr::select("date2", 'Property.Type', 'Price') %>% 
+  dplyr::filter(Property.Type != "Otro") %>% 
+  group_by(date2, Property.Type) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=Property.Type)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=Property.Type),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_x_date(date_breaks='5 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Tipo de vivienda",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  scale_fill_manual("Tipo de vivienda",
+                    values = c('Unifamiliar'='coral',
+                               'Piso/Apartamento'='cadetblue3',
+                               'Semi-adosado'='darkolivegreen3',
+                               'Adosado'='seagreen',
+                               'Otro'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+legend <- cowplot::get_legend(g1)
+
+layout <- "AABBC"
+
+plot_save <- 
+  g1 + 
+  theme(legend.position="none") + ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Todos los casos") + 
+  
+  g2 +
+  theme(legend.position="none") + ylab("") + xlab("Fecha") +
+  labs(title="Sin tasas adicionales") +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  legend + 
+  
+  plot_layout(design = layout) +
+  plot_annotation("Evolución del precio medio en función del tipo de vivienda", 
+                  theme=theme(plot.title=element_text(hjust=0.5, face="bold")))
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/evolucion_property_type.jpeg", 
+       plot = plot_save, device = "jpeg", 
+       width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+z_score <- 1.96 # 95% CI
+
+plot_save <- data %>% 
+  dplyr::select("date2", 'PPD.Category.Type', 'Price') %>% 
+  
+  group_by(date2, PPD.Category.Type) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=PPD.Category.Type)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=PPD.Category.Type),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_y_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks()
+  ) +
+  scale_x_date(date_breaks='3 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Tipo de pago",
+                    values = c('A'='coral',
+                               'B'='cadetblue3'),
+                    labels = c("Precio estándar", "Tasas adicionales")) +
+  scale_fill_manual("Tipo de pago",
+                    values = c('A'='coral',
+                               'B'='cadetblue3'),
+                    labels = c("Precio estándar", "Tasas adicionales")) +
+  ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Evolución del precio medio en función del tipo de pago") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/evolucion_ppd_category_type.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+z_score <- 1.96 # 95% CI
+
+g1 <- data %>% 
+  dplyr::select("date2", 'Duration', 'Price') %>% 
+  
+  group_by(date2, Duration) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=Duration)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=Duration),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_y_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks(),
+    limits = c(1e4,1e6)
+  ) +
+  scale_x_date(date_breaks='5 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Tipo de tenencia",
+                    values = c('Alquiler'='coral',
+                               'Propiedad'='cadetblue3',
+                               'Desconocido'='purple2')) +
+  scale_fill_manual("Tipo de tenencia",
+                    values = c('Alquiler'='coral',
+                               'Propiedad'='cadetblue3',
+                               'Desconocido'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+g2 <- data %>% 
+  dplyr::select("date2", 'Duration', 'Price') %>% 
+  dplyr::filter(Duration != "Desconocido") %>% 
+  group_by(date2, Duration) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=Duration)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=Duration),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_x_date(date_breaks='5 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Tipo de tenencia",
+                    values = c('Alquiler'='coral',
+                               'Propiedad'='cadetblue3',
+                               'Desconocido'='purple2')) +
+  scale_fill_manual("Tipo de tenencia",
+                    values = c('Alquiler'='coral',
+                               'Propiedad'='cadetblue3',
+                               'Desconocido'='purple2')) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+legend <- cowplot::get_legend(g1)
+
+layout <- "AABBC"
+
+plot_save <- 
+  g1 + 
+  theme(legend.position="none") + ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Todos los casos") +
+  
+  g2 + 
+  theme(legend.position="none") + ylab("") + xlab("Fecha") +
+  labs(title="Sin tasas adicionales") +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  legend + 
+  
+  plot_layout(design = layout) +
+  plot_annotation("Evolución del precio medio en función del tipo de tenencia de los inquilinos", 
+                  theme=theme(plot.title=element_text(hjust=0.3, face="bold"))) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/evolucion_duration.jpeg", plot = plot_save, device = "jpeg", width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+z_score <- 1.96 # 95% CI
+
+plot_save <- data %>% 
+  dplyr::select("date2", 'Old.New', 'Price') %>% 
+  
+  group_by(date2, Old.New) %>% 
+  summarise(
+    mean_price = mean(Price, na.rm=TRUE),
+    std = sd(Price, na.rm=TRUE),
+    n = n(),
+    lower_ci = mean_price - (z_score * (std/sqrt(n))),
+    upper_ci = mean_price + (z_score * (std/sqrt(n)))
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=date2, y=mean_price, color=Old.New)) +
+  geom_line(size=0.6) + 
+  geom_ribbon(aes(x=date2,
+                  ymin=lower_ci, 
+                  ymax=upper_ci,
+                  fill=Old.New),
+              alpha=0.3, linewidth=0, colour = NA) +
+
+  # Styling
+  scale_y_continuous(labels = fancy_scientific) +
+  scale_x_date(date_breaks='3 years', date_labels="%Y") +
+  
+  # Legend
+  scale_color_manual("Antigüedad de la vivienda",
+                    values = c('Nuevo'='coral',
+                               'Segunda_mano'='cadetblue3'),
+                    labels = c("Nuevo", "Segunda mano")) +
+  scale_fill_manual("Antigüedad de la vivienda",
+                    values = c('Nuevo'='coral',
+                               'Segunda_mano'='cadetblue3'),
+                    labels = c("Nuevo", "Segunda mano")) +
+  ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Evolución del precio medio en función de la antigüedad de la vivienda") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/evolucion_old_new.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+
+# Outliers
+
+```{r}
+input_path <- "../output/R"
+data <- readr::read_csv(paste(input_path, "/evolucion.csv", sep="")) %>%
+  mutate(
+    Year = lubridate::year(date2)
+  )
+head(data)
+```
+
+```{r}
+temp <- rbind(
+  data %>% 
+  dplyr::select('Duration', 'Price', 'Year') %>% 
+  dplyr::filter(Year >= 2020) %>% 
+  mutate(`Época`="A partir de 2020"),
+  
+  data %>% 
+  dplyr::select('Duration', 'Price', 'Year') %>% 
+  mutate(`Época`="Desde 1995 hasta 2023")
+)
+
+plot_save <- temp %>% 
+  ggplot(aes(x=Price, y=Duration, fill=`Época`, color=`Época`)) +
+  geom_boxplot(alpha=0.2) +
+  
+  # Styling
+  scale_x_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks(),
+  ) +
+  ylab("Tipo de tenencia") + xlab("Precio (£)") +
+  labs(title="Distribución de los precios para los distintos tipos de tenencia de los inquilinos") +
+  theme(plot.title=element_text(hjust = 0.5, face="bold"))
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/outliers_duration.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+temp <- rbind(
+  data %>% 
+  dplyr::select('Property.Type', 'Price', 'Year') %>% 
+  dplyr::filter(Year >= 2020) %>% 
+  mutate(`Época`="A partir de 2020"),
+  
+  data %>% 
+  dplyr::select('Property.Type', 'Price', 'Year') %>% 
+  mutate(`Época`="Desde 1995 hasta 2023")
+)
+
+plot_save <- temp %>% 
+  ggplot(aes(x=Price, y=Property.Type, fill=`Época`, color=`Época`)) +
+  geom_boxplot(alpha=0.2) +
+  
+  # Styling
+  scale_x_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks(),
+  ) +
+  ylab("Tipo de vivienda") + xlab("Precio (£)") +
+  labs(title="Distribución de los precios") +
+  theme(plot.title=element_text(hjust = 0.5, face="bold"))
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/outliers_property_type.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+```{r}
+temp <- rbind(
+  data %>% 
+  dplyr::select('Old.New', 'Price', 'Year') %>% 
+  dplyr::filter(Year >= 2020) %>% 
+  mutate(`Época`="A partir de 2020"),
+  
+  data %>% 
+  dplyr::select('Old.New', 'Price', 'Year') %>% 
+  mutate(`Época`="Desde 1995 hasta 2023")
+)
+
+plot_save <- temp %>% 
+  ggplot(aes(x=Price, y=Old.New, fill=`Época`, color=`Época`)) +
+  geom_boxplot(alpha=0.2) +
+  
+  # Styling
+  scale_x_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks(),
+  ) +
+  ylab("Antigüedad de la vivienda") + xlab("Precio (£)") +
+  labs(title="Distribución de los precios") +
+  theme(plot.title=element_text(hjust = 0.5, face="bold"))
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/outliers_old_new.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+# Selección de variables
+
+## Feature Importance
+
+```{r}
+data <- read_csv("../output/R/feature_importance.csv") %>% 
+  mutate(descartada = ifelse((Importance<1e-3), "Descartada", "Incluida en el entrenamiento"))
+
+
+plot_save <- data %>% 
+  ggplot(aes(y=forcats::fct_reorder(Feature, Importance), x=Importance, fill=descartada)) +
+  geom_col()
+
+data
+```
+
+```{r}
+plot_save <- data %>%
+  ggplot(aes(y=forcats::fct_reorder(Feature, Importance), x=Importance, fill=descartada, color=descartada)) +
+  geom_col(alpha=0.8) +
+  
+  labs(
+    title = "Coeficientes de correlación con la variable objetivo",
+    x = "Importancia de la variable",
+    y = "Variables explicativas",                 
+    fill = "Uso de la variable",
+    color = "Uso de la variable" 
+  ) +
+  scale_fill_manual(
+    values = c("Descartada" = "coral", "Incluida en el entrenamiento" = "skyblue2")
+  ) +
+  scale_color_manual(
+    values = c("Descartada" = "coral", "Incluida en el entrenamiento" = "skyblue2")
+  ) +
+  
+  theme_minimal() +                                       
+  theme(
+    panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5),
+  )
+
+ggsave("../output/images/seleccion de variables/feature_importance.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+ggsave("../python/wsl-models/feature_importance.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+plot_save
+```
+
+
+
+
+## Correlaciones
+
+```{r}
+data <- read_csv("../output/R/correlations.csv")
+head(data)
+```
+
+```{r}
+data_plot <- data %>% 
+  rename(variable = `...1`, coeficiente_correlacion=Price_boxcox) %>% 
+  dplyr::select(variable, coeficiente_correlacion) %>% 
+  dplyr::filter(!(variable %in% c("Price_boxcox", "Price", "org_price", "org_mean_price")))
+
+coef <- data_plot$coeficiente_correlacion
+data_plot["descartada"] <- as.factor(ifelse((coef<0.3)&(coef>-0.1), 1, 0))
+data_plot
+```
+
+```{r}
+plot_save <- data_plot %>%
+  ggplot(aes(y = forcats::fct_reorder(variable, coeficiente_correlacion), 
+             x = coeficiente_correlacion, 
+             fill = descartada, color=descartada)) +
+  geom_col(alpha=0.8) +
+  
+  labs(
+    title = "Coeficientes de correlación con la variable objetivo",
+    x = "Coeficiente de correlación",
+    y = "Variables explicativas",                 
+    fill = "Uso de la variable",
+    color = "Uso de la variable" 
+  ) +
+  scale_fill_manual(
+    values = c("1" = "coral", "0" = "skyblue2"),
+    labels = c("1" = "Descartada", "0" = "Incluida en el entrenamiento")
+  ) +
+  scale_color_manual(
+    values = c("1" = "coral1", "0" = "skyblue3"),
+    labels = c("1" = "Descartada", "0" = "Incluida en el entrenamiento")
+  ) +
+  
+  theme_minimal() +                                       
+  theme(
+    panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5),
+  )
+
+ggsave("../output/images/seleccion de variables/correlacion_especifico.jpeg", 
+       plot = plot_save, device = "jpeg",         width=30, units="cm")
+plot_save
+```
+
+# Series temporales
+
+```{r}
+long_format <- function(data, variable, category) {
+  rbind(
+    data %>% dplyr::select(all_of(c("date", "Price"))) %>% 
+      mutate(type = "Original", variable=variable, category=category),
+    data %>% dplyr::select(all_of(c("date", "pred"))) %>% 
+      mutate(type = "Predicción", variable=variable, category=category) %>% 
+      rename(Price=pred)
+  )
+}
+```
+
+
+
+```{r}
+input_path <- "../output/series-temporales/"
+variables <- c("duration", "first_hand", "property_type")
+
+long_df <- data.frame(
+    date=as.Date(character()),
+    Price=double(),
+    type=factor(),
+    variable=factor(),
+    category=factor(),
+    stringsAsFactors=TRUE
+  )
+
+
+for (var in variables) {
+  folder_path <- paste(input_path, var, "/", sep="")
+  files <- list.files(folder_path)
+
+    for (file in files) {
+    category <- strsplit(file, split="\\.")[[1]][1]
+    data <- readr::read_csv(paste(folder_path, file, sep=""),
+                            show_col_types = FALSE)
+    
+    long_df <- rbind(
+      long_df,
+      long_format(data, var, category)
+    )
+    
+  }
+}
+
+head(long_df)
+```
+
+```{r}
+long_df$type <- 
+  if_else(long_df$type == "Predicción", 
+          str_replace(paste(long_df$type, str_to_lower(long_df$category), sep=" "), "_", "/"), 
+          long_df$type)
+```
+
+Error de predicción para cada caso:
+```{r}
+readr::read_csv("../output/series-temporales/error_metrics.csv", show_col_types = FALSE)
+```
+
+
+
+
+## Duration
+
+```{r}
+
+g1 <- long_df %>% 
+  filter(variable == "duration") %>% 
+  ggplot(aes(x=date, y=Price, color=type)) +
+  geom_line(size=0.6) +
+  facet_grid(category ~ ., scales = "free_y") +
+
+  # Styling
+  scale_color_manual(
+    values = c("Original" = "gray50", "Predicción alquiler" = "coral", "Predicción propiedad" = "cadetblue3")
+  ) 
+
+g2 <- long_df %>% 
+  filter(variable == "duration", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6) +
+  scale_color_manual(
+    values = c("Alquiler" = "coral", "Propiedad" = "cadetblue3")
+  )
+
+# Plot
+layout <- "ABB"
+
+plot_save <- 
+  g1 + ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Comparación con precios reales", color="Precio:") +
+  theme(legend.position="bottom",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) + 
+  guides(color = guide_legend(nrow=2)) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  g2 + ylab("") + xlab("Fecha") +
+  labs(title="Comparación de las predicciones") +
+  theme(legend.position="none",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  plot_layout(design = layout, guides="collect") +
+  plot_annotation("Evolución del precio según el tipo de tenencia de los inquilinos", 
+                  theme=theme(plot.title=element_text(hjust=0.5, face="bold"),
+                              legend.position = "bottom")) +
+  guides(color = guide_legend(nrow=2))
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/predicciones_duration.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+## Property Type
+
+```{r}
+
+g1 <- long_df %>% 
+  filter(variable == "property_type") %>% 
+  mutate(category = gsub("_", "/", x=category)) %>% 
+  ggplot(aes(x=date, y=Price, color=type)) +
+  geom_line(size=0.6) +
+  facet_grid(category ~ ., scales = "free_y") +
+
+  # Styling
+  scale_color_manual(
+    values = c("Original" = "gray50", 
+               "Predicción adosado" = "seagreen", 
+               "Predicción semi-adosado" = "darkolivegreen3",
+               "Predicción piso/apartamento" = "cadetblue3", 
+               "Predicción unifamiliar" = "coral")
+  )
+
+  # scale_x_date(date_breaks='5 years', date_labels="%Y") 
+
+g2 <- long_df %>% 
+  filter(variable == "property_type", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6) +
+  scale_color_manual(
+    values = c("Adosado" = "seagreen", 
+               "Semi-adosado" = "darkolivegreen3",
+               "Piso_Apartamento" = "cadetblue3", 
+               "Unifamiliar" = "coral")
+  )
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+legend <- cowplot::get_legend(g1)
+
+layout <- "ABB"
+
+plot_save <- 
+  g1 + ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Comparación con precios reales", color="Precio:") +
+  theme(legend.position="bottom",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) + 
+  guides(color = guide_legend(nrow=2)) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  g2 + ylab("") + xlab("Fecha") +
+  labs(title="Comparación de las predicciones") +
+  theme(legend.position="none",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  plot_layout(design = layout, guides="collect") +
+  plot_annotation("Evolución del precio según el tipo de vivienda", 
+                  theme=theme(plot.title=element_text(hjust=0.5, face="bold"),
+                              legend.position = "bottom")) +
+  guides(color = guide_legend(nrow=2))
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/predicciones_property_type.jpeg", plot = plot_save, device = "jpeg",         
+       width=30, height=25, units="cm")
+
+plot_save
+```
+
+
+## First hand
+
+```{r}
+
+g1 <- long_df %>% 
+  filter(variable == "first_hand") %>% 
+  mutate(category = ifelse(category==0, "Vivienda de segunda mano", "Vivienda nueva")) %>% 
+  ggplot(aes(x=date, y=Price, color=type)) +
+  geom_line(size=0.6) +
+  facet_grid(category ~ ., scales = "free_y") +
+
+  # Styling
+  scale_color_manual(
+    values = c("Original" = "gray50", 
+               "Predicción 1" = "cadetblue3", 
+               "Predicción 0" = "coral"),
+    labels = c("Predicción 1" = "Vivienda nueva",
+               "Predicción 0" = "Vivienda de segunda mano")
+  )
+
+  # scale_x_date(date_breaks='5 years', date_labels="%Y") 
+
+g2 <- long_df %>% 
+  filter(variable == "first_hand", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6) +
+  scale_color_manual(
+    values = c("1" = "cadetblue3", "0" = "coral")
+  )
+
+# Plot
+# https://ggplot2-book.org/arranging-plots
+legend <- cowplot::get_legend(g1)
+
+layout <- "ABB"
+
+plot_save <- 
+  g1 + ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Comparación con precios reales", color="Precio:") +
+  theme(legend.position="bottom",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) + 
+  guides(color = guide_legend(nrow=2)) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  g2 + ylab("") + xlab("Fecha") +
+  labs(title="Comparación de las predicciones") +
+  theme(legend.position="none",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=13, face="bold"),
+        legend.text=element_text(size=12),
+        strip.text = element_text(size = 15) ) +
+  scale_y_continuous(labels = fancy_scientific) +
+  
+  plot_layout(design = layout, guides="collect") +
+  plot_annotation("Evolución del precio según la antigüedad de la vivienda", 
+                  theme=theme(plot.title=element_text(hjust=0.5, face="bold"),
+                              legend.position = "bottom")) +
+  guides(color = guide_legend(nrow=2))
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/predicciones_first_hand.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, height=20, units="cm")
+
+plot_save
+```
+
+# Series temporales (SOLO RESULTADOS)
+
+```{r}
+long_format <- function(data, variable, category) {
+  rbind(
+    data %>% dplyr::select(all_of(c("date", "Price"))) %>% 
+      mutate(type = "Original", variable=variable, category=category),
+    data %>% dplyr::select(all_of(c("date", "pred"))) %>% 
+      mutate(type = "Predicción", variable=variable, category=category) %>% 
+      rename(Price=pred)
+  )
+}
+```
+
+
+
+```{r}
+input_path <- "../output/series-temporales/"
+variables <- c("duration", "first_hand", "property_type")
+
+long_df <- data.frame(
+    date=as.Date(character()),
+    Price=double(),
+    type=factor(),
+    variable=factor(),
+    category=factor(),
+    stringsAsFactors=TRUE
+  )
+
+
+for (var in variables) {
+  folder_path <- paste(input_path, var, "/", sep="")
+  files <- list.files(folder_path)
+
+    for (file in files) {
+    category <- strsplit(file, split="\\.")[[1]][1]
+    data <- readr::read_csv(paste(folder_path, file, sep=""),
+                            show_col_types = FALSE)
+    
+    long_df <- rbind(
+      long_df,
+      long_format(data, var, category)
+    )
+    
+  }
+}
+
+head(long_df)
+```
+
+```{r}
+long_df$type <- 
+  if_else(long_df$type == "Predicción", 
+          str_replace(paste(long_df$type, str_to_lower(long_df$category), sep=" "), "_", "/"), 
+          long_df$type)
+```
+
+Error de predicción para cada caso:
+```{r}
+readr::read_csv("../output/series-temporales/error_metrics.csv", show_col_types = FALSE)
+```
+
+
+
+
+## Duration
+
+```{r}
+plot_save <- long_df %>% 
+  filter(variable == "duration", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6, alpha=0.5) +
+  geom_smooth(fill=NA) +
+  
+  scale_color_manual(
+    "Tipo de tenencia del inquilino",
+    values = c("Alquiler" = "coral", "Propiedad" = "cadetblue3")
+  ) + 
+  ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Evolución del precio según el tipo de tenencia de los inquilinos") +
+  scale_y_continuous(labels = fancy_scientific) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/resultados_predicciones_duration.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+## Property Type
+
+```{r}
+plot_save <- 
+  long_df %>% 
+  filter(variable == "property_type", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6, alpha=0.5) +
+  geom_smooth(fill=NA) +
+  scale_color_manual(
+    "Tipo de vivienda",
+    values = c("Adosado" = "seagreen", 
+               "Semi-adosado" = "darkolivegreen3",
+               "Piso_Apartamento" = "cadetblue3", 
+               "Unifamiliar" = "coral")
+  ) +
+  ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Evolución del precio según el tipo de vivienda") +
+  scale_y_continuous(labels = fancy_scientific) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/resultados_predicciones_property_type.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+
+## First hand
+
+```{r}
+plot_save <- 
+  long_df %>% 
+  filter(variable == "first_hand", type != "Original") %>% 
+  ggplot(aes(x=date, y=Price, color=category)) +
+  geom_line(size=0.6, alpha=0.5) +
+  geom_smooth(fill=NA) +
+  scale_color_manual(
+    "Antigüedad de la vivienda",
+    values = c("1" = "cadetblue3", "0" = "coral"),
+    labels = c("1" = "Vivienda nueva",
+               "0" = "Vivienda de segunda mano")
+  ) +
+  ylab("Precio (£)") + xlab("Fecha") +
+  labs(title="Evolución del precio según la antigüedad de la vivienda") +
+  scale_y_continuous(labels = fancy_scientific) 
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/series temporales/resultados_predicciones_first_hand.jpeg", plot = plot_save, device = "jpeg",         width=30, units="cm")
+
+plot_save
+```
+
+# Análisis de series temporales
+
+## Estudio de la granularidad temporal
+
+```{r}
+input_path <- "../output/series-temporales/analisis-granularidad/"
+granularidad_price <- paste(input_path, "granularidad_price.csv", sep="") 
+volatilidad <- paste(input_path, "volatilidad.csv", sep="") 
+acf_daily <- paste(input_path, "acf_daily.csv", sep="") 
+pacf_daily <- paste(input_path, "pacf_daily.csv", sep="") 
+fft <- paste(input_path, "fft.csv", sep="") 
+fft_peaks <- paste(input_path, "peaks_fft.csv", sep="") 
+```
+
+### Comparación
+```{r}
+data <- read_csv(granularidad_price) %>% mutate(precision = factor(precision, levels=c("Diario", "Mensual", "Anual")))
+plot_save <- data %>% 
+  ggplot(aes(x=date, y=Price, color=precision)) +
+  geom_line(linewidth=0.8) +
+  scale_color_manual("Granularidad temporal",
+                     values = c("Diario" = "seagreen",
+                                "Mensual" = "darkolivegreen3",
+                                "Anual" = "yellow2")) +
+  xlab("Fecha") +
+  ylab("Precio (£)") +
+  labs(title="Comparación de la evolución del precio según el nivel de precisión temporal")
+  scale_x_date(date_breaks='2 years', date_labels="%Y") 
+
+# Save plot
+ggsave("../output/images/series temporales/granularidad/comparacion.jpeg",
+       width=30, units="cm", plot = plot_save)
+plot_save
+```
+
+### Volatilidad
+```{r}
+data <- read_csv(volatilidad) %>% 
+  mutate(
+    precision = factor(precision, levels=c("Anual", "Mensual", "Diario")),
+    variable = factor(variable, levels=c("Media", "Desviación estándar", "Varianza"))
+    ) %>% 
+  filter(variable != "Varianza")
+plot_save <- data %>% 
+  ggplot(aes(y=variable, x=value, fill=precision, color=precision)) +
+  geom_col(position = position_dodge(0.92), alpha=0.5) +
+  scale_color_manual("Granularidad temporal",
+                     values = c("Anual" = "yellow2",
+                                "Mensual" = "darkolivegreen3",
+                                "Diario" = "seagreen"),
+                     guide = guide_legend(reverse = TRUE) ) +
+  scale_fill_manual("Granularidad temporal",
+                    values = c("Anual" = "yellow2",
+                                "Mensual" = "darkolivegreen3",
+                                "Diario" = "seagreen"),
+                    guide = guide_legend(reverse = TRUE) ) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"),
+        title=element_text(size=15, face="bold"),
+        legend.text=element_text(size=12)) +
+  ylab("") + xlab("Precio (£)") +
+  labs(title="FFT de los precios de transacciones diarias")
+
+# Save plot
+ggsave("../output/images/series temporales/granularidad/volatilidad.jpeg",
+       width=30, units="cm", plot = plot_save)
+plot_save
+```
+
+### ACF y PACF
+
+```{r}
+data_acf <- read_csv(acf_daily) %>% mutate(tipo="Autocorrelación (ACF)")
+data_pacf <- read_csv(pacf_daily) %>% mutate(tipo="Autocorrelación parcial (PACF)")
+data <- rbind(data_acf, data_pacf) %>% 
+  mutate(tipo = 
+           factor(tipo,
+                  levels=c("Autocorrelación (ACF)",
+                           "Autocorrelación parcial (PACF)")))
+head(data)
+```
+
+```{r}
+plot_save <- data %>% 
+  ggplot(aes(x=lags, y=value)) +
+  geom_col(width = 0.1) +
+  geom_point() +
+  geom_ribbon(aes(ymin = -0.05, ymax = 0.05), fill = "blue", alpha = 0.2) +
+  geom_line(aes(y = rep(0.05, length(lags))), color = "blue") +
+  geom_line(aes(y = rep(-0.05, length(lags))), color = "blue") +
+  facet_wrap(~tipo, ncol=1, scale="free") +
+  scale_x_continuous(breaks = seq(0, 90, by = 10)) +
+  ylab("Coeficiente de correlación") + xlab("Retrasos") +
+  labs(title="ACF y PACF de la serie temporal con granularidad diaria")
+
+ggsave("../output/images/series temporales/granularidad/acf-pacf.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+plot_save
+```
+
+
+### FFT
+
+```{r}
+data <- read_csv(fft)
+maxima_idx <- read_csv(fft_peaks, col_names = FALSE)[[1]] + 1
+maxima <- data[maxima_idx,]
+
+plot_save <- data %>% 
+  ggplot(aes(x=frequency, y=value)) +
+  geom_line(linewidth=0.6) +
+  geom_point(data = maxima, aes(x=frequency, y=value), color="red", size=2) +
+  scale_y_continuous(
+    trans = "log10",
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x)),
+    guide = guide_axis_logticks()
+  ) + 
+  ylab("Magnitud") + xlab("Frecuencia (ciclos por día)") +
+  labs(title="FFT de los precios de transacciones diarias")
+
+# Save
+ggsave("../output/images/series temporales/granularidad/fft.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+
+plot_save
+```
+
+## SARIMA
+
+```{r}
+input_path <- "../output/series-temporales/sarima/"
+acf <- paste(input_path, "acf.csv", sep="") 
+acf_diff_1 <- paste(input_path, "acf_diff_1.csv", sep="") 
+acf_diff_2 <- paste(input_path, "acf_diff_2.csv", sep="") 
+pacf <- paste(input_path, "pacf.csv", sep="") 
+pacf_diff_1 <- paste(input_path, "pacf_diff_1.csv", sep="") 
+pacf_diff_2 <- paste(input_path, "pacf_diff_2.csv", sep="") 
+descomposicion <- paste(input_path, "descomposicion.csv", sep="") 
+comparacion_final <- paste(input_path, "comparacion_final.csv", sep="") 
+```
+
+### ACF
+
+```{r}
+data_acf <- read_csv(acf) %>% mutate(tipo = "Autocorrelación de la serie temporal original")
+data_acf1 <- read_csv(acf_diff_1) %>% mutate(tipo = "Autocorrelación de la serie diferenciada 1 vez (d=1)")
+data_acf2 <- read_csv(acf_diff_2) %>% mutate(tipo = "Autocorrelación de la serie diferenciada 2 veces (d=2)")
+data <- rbind(data_acf, data_acf1, data_acf2) %>% 
+  mutate(tipo = 
+           factor(tipo,
+                  levels=c("Autocorrelación de la serie temporal original",
+                           "Autocorrelación de la serie diferenciada 1 vez (d=1)",
+                           "Autocorrelación de la serie diferenciada 2 veces (d=2)")))
+head(data)
+```
+
+```{r}
+plot_save <- data %>% 
+  ggplot(aes(x=lags, y=value)) +
+  geom_col(width = 0.1) +
+  geom_point() +
+  geom_ribbon(aes(ymin = -0.05, ymax = 0.05), fill = "blue", alpha = 0.2) +
+  geom_line(aes(y = rep(0.05, length(lags))), color = "blue") +
+  geom_line(aes(y = rep(-0.05, length(lags))), color = "blue") +
+  facet_wrap(~tipo, ncol=1, scale="free") +
+  scale_x_continuous(breaks = seq(0, 90, by = 10)) +
+  ylab("Coeficiente de correlación") + xlab("Retrasos")
+
+ggsave("../output/images/series temporales/sarima/autocorrelacion.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+plot_save
+```
+
+### PACF
+
+```{r}
+data_pacf <- read_csv(pacf) %>% mutate(tipo = "Autocorrelación parcial de la serie temporal original")
+data_pacf1 <- read_csv(pacf_diff_1) %>% mutate(tipo = "Autocorrelación parcial de la serie diferenciada 1 vez (d=1)")
+data_pacf2 <- read_csv(pacf_diff_2) %>% mutate(tipo = "Autocorrelación parcial de la serie diferenciada 2 veces (d=2)")
+data <- rbind(data_pacf, data_pacf1, data_pacf2) %>% 
+  mutate(tipo = 
+           factor(tipo,
+                  levels=c("Autocorrelación parcial de la serie temporal original",
+                           "Autocorrelación parcial de la serie diferenciada 1 vez (d=1)",
+                           "Autocorrelación parcial de la serie diferenciada 2 veces (d=2)")))
+head(data)
+```
+
+```{r}
+plot_save <- data %>% 
+  ggplot(aes(x=lags, y=value)) +
+  geom_col(width = 0.1) +
+  geom_point() +
+  geom_ribbon(aes(ymin = -0.05, ymax = 0.05), fill = "blue", alpha = 0.2) +
+  geom_line(aes(y = rep(0.05, length(lags))), color = "blue") +
+  geom_line(aes(y = rep(-0.05, length(lags))), color = "blue") +
+  facet_wrap(~tipo, ncol=1, scale="free") +
+  scale_x_continuous(breaks = seq(0, 90, by = 10)) +
+  ylab("Coeficiente de correlación") + xlab("Retrasos")
+
+ggsave("../output/images/series temporales/sarima/autocorrelacion-parcial.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+plot_save
+```
+
+### Descomposición
+
+```{r}
+data <- read_csv(descomposicion) %>% mutate(tipo = 
+                                              factor(tipo,
+                                                     levels=c("Observada", "Tendencia", "Estacionalidad", "Residuo")))
+head(data)
+```
+
+```{r}
+plot_save <- data %>% 
+  ggplot(aes(x=date, y=Price)) +
+  geom_line(linewidth=0.5) +
+  facet_wrap(~tipo, ncol=1, scales="free") +
+  xlab("Fecha") +
+  ylab("Precio") +
+  scale_x_date(date_breaks='2 years', date_labels="%Y") +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) 
+
+
+ggsave("../output/images/series temporales/sarima/descomposicion.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+
+plot_save
+```
+
+### Comparación final
+
+```{r}
+data <- read_csv(comparacion_final) %>% mutate(
+  tipo = factor(tipo, 
+                levels = c(
+                  "Conjunto de test",
+                  "grid_search (MSE)",
+                  "autoarima (AIC)"
+                ))
+)
+head(data)
+```
+
+```{r}
+plot_save <- data %>% 
+  ggplot(aes(x=date, y=Price, color=tipo)) +
+  geom_line(linewidth=0.6) +
+  
+  scale_x_date(date_breaks='1 years', 
+               date_labels="%Y",
+               limits = as.Date(c('2016-01-01','2023-04-01'))) +
+  scale_y_continuous(labels = fancy_scientific) +
+  coord_cartesian(ylim=c(1.5e5,4.5e5)) +
+
+  scale_color_manual("Origen de los datos",
+                     values = c("Conjunto de test" = "gray50",
+                                "grid_search (MSE)" = "coral",
+                                "autoarima (AIC)" = "cadetblue3")) +
+  xlab("Fecha") +
+  ylab("Precio (£)") +
+  labs(title="Predicción de los modelos autorregresivos junto a los datos reales")
+
+ggsave("../output/images/series temporales/sarima/comparacion-final.jpeg", 
+       plot = plot_save, device = "jpeg",         
+       width=30, units="cm")
+
+plot_save
+```
+
+# Transformación boxcox de la variable objetivo (Price)
+
+```{r}
+data <- read_csv("../output/R/price_vs_price_boxcox.csv")
+head(data)
+```
+
+```{r}
+g1 <- data %>% 
+  ggplot(aes(x=Price, y = after_stat(count / sum(count)))) +
+  geom_histogram(color="cadetblue3", fill="cadetblue3", alpha=0.6) +
+  scale_x_continuous(labels = fancy_scientific) +
+  scale_y_continuous(labels = scales::percent) +
+  xlab("Precio (£)") +
+  ylab("Frecuencia relativa") +
+  labs(title="")
+
+g2 <- data %>% 
+  ggplot(aes(x=Price_boxcox, y = after_stat(count / sum(count)))) +
+  geom_histogram(color="cadetblue3", fill="cadetblue3", alpha=0.6) +
+  scale_y_continuous(labels = scales::percent) +
+  xlab("Transformación Box-Cox del precio") +
+  ylab("") +
+  labs(title="")
+```
+
+
+```{r}
+layout <- "AB"
+
+plot_save <- 
+  g1 + g2 +
+  
+  plot_layout(design = layout) +
+  plot_annotation("Comparación del sesgo de la variable objetivo con su transformación", 
+                  theme=theme(plot.title=element_text(hjust=0.5, face="bold")))
+
+
+# https://stackoverflow.com/questions/72604659/how-to-export-ggplot-in-r-with-3543-pixels-in-jpeg-format
+ggsave("../output/images/R/price_vs_price_boxcox.jpeg", 
+       plot = plot_save, device = "jpeg", 
+       width=30, units="cm")
+
+plot_save
+```
+
+# Datos faltantes
+
+```{r}
+all_idx <- seq(1, nrow(load_variable("Price", with_year = F)), 1)
+all_idx[column %>% is.na()]
+```
+
+
+```{r}
+all_idx <- seq(1, nrow(load_variable("Price", with_year = F)), 1)
+col_datos <- c("Transaction.unique.identifier",
+               "Price", "Date.of.Transfer",
+               "Postcode", "Property.Type",
+               "Old.New", "Duration", "PAON", 
+               "SAON", "Street", "Locality",
+               "Town.City", "District", "County",
+               "PPD.Category.Type",
+               "Record.Status...monthly.file.only")
+idx_NAs <- c()
+vars_NAs <- c()
+
+for (var in col_datos) {
+  column <- load_variable(var, with_year = F)
+  temp <- all_idx[column %>% is.na()]
+  
+  if (temp %>% sum() != 0) {
+    vars_NAs <- c(vars_NAs, var)
+    idx_NAs <- c(idx_NAs, temp)
+  }
+}
+
+idx_NAs <- idx_NAs[!duplicated(idx_NAs)]
+```
+
+```{r}
+casos_NAs <- tibble(.rows = length(idx_NAs))
+
+for (var in vars_NAs) {
+  column <- load_variable(var, with_year = F)[idx_NAs, ]
+  casos_NAs <- cbind(casos_NAs, column)
+}
+
+head(casos_NAs)
+```
+
+```{r}
+png("../output/images/NAs.png", width = 1980, height = 1500, units = "px", res=300)
+casos_NAs %>% gg_miss_upset()
+dev.off()
+
+# casos_NAs %>% gg_miss_upset() 
+# 
+# ggsave(filename="../output/images/NAs.jpeg", plot = casos_NAs %>% gg_miss_upset() )
+
+```
+
+
+
