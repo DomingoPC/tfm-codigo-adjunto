@@ -1,4 +1,4 @@
-# 🏘️ Predicting Housing Prices in the UK 🏠
+# 🏘️ Predicting Housing Prices in the UK 🏘️
 
 This repository accompanies the study *"Predicciones del precio de la vivienda a partir de datos del registro de Reino Unido"* (or "Predicting Housing Prices in the UK" in short) conducted as part of my Master's thesis (TFM). The project aims to forecast housing prices using regression models and time series analysis. It incorporates datasets from multiple sources, including Kaggle, census records, and geographic APIs.
 
