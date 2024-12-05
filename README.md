@@ -1,29 +1,61 @@
-# Sobre el código adjunto
+# 🏘️ Predicting Housing Prices in the UK 🏠
 
-Este proyecto contiene una parte en Python (principal) y otra en R (gráficas de los resultados finales).
+This repository accompanies the study *"Predicciones del precio de la vivienda a partir de datos del registro de Reino Unido"* (or "Predicting Housing Prices in the UK" in short) conducted as part of my Master's thesis (TFM). The project aims to forecast housing prices using regression models and time series analysis. It incorporates datasets from multiple sources, including Kaggle, census records, and geographic APIs.
 
-## Indicaciones de la carpeta "Python"
+---
 
-Esta contiene los archivos principales del proyecto. El orden recomendado de visualización es:
+## 📂 Repository Structure
 
-1. **Carga_de_datos.ipynb**: contiene la construcción de los archivos .parquet que se usan como conjunto de test y entrenamiento y las muestras más reducidas que usamos para el estudio de los datos. Se apoya en las funciones creadas en el fichero **funciones_auxiliares.py**.
+The project is divided into **Python** and **R** components:
 
-2. **Data_collection_&_EDA.ipynb**: desarrollo del pipeline utilizado para adecuar los datos a los modelos. Se usa, en su mayoría, la muestra de entrenamiento. A partir de ella, se construyen herramientas fundamentales para el uso del pipeline, como puede ser el escalador de variables.
+### **Python**
+The Python code is the backbone of the project, focusing on data processing, modeling, and preliminary analysis. Recommended order of exploration:
+1. **`Carga_de_datos.ipynb`**:
+   - Constructs `.parquet` files for train and test datasets.
+   - Prepares reduced samples for data analysis using auxiliary functions from `funciones_auxiliares.py`.
 
-3. **Coordenadas_API.ipynb**: fuente de datos de enriquecimiento. Concretamente, se extrae la posición geográfica (latitud, longitud) de los pueblos y ciudades de Reino Unido. Este notebook se menciona en el del punto 2, por lo que podría resultar interesante analizarlo en ese momento.
+2. **`Data_collection_&_EDA.ipynb`**:
+   - Develops the data pipeline to process the datasets.
+   - Based on the exploratory data analysis, several tools to transform and preprocess data are developed, such us the variable scaler and transformations on the target variable.
 
-4. **pipeline.ipynb**: transformación de los conjuntos de entrenamiento y test guardados en formato parquet. Con ellos, entrenamos los modelos de **regresión**.
+3. **`Coordenadas_API.ipynb`**:
+   - Enriches the dataset by extracting geographic coordinates (latitude, longitude) of UK towns and cities via the OpenCage and Nominatim APIs.
+   - This notebook extends from the previous one.
 
-Las subcarpetas de series temporales y modelos wsl contienen la información sobre los modelos de series temporales autorregresivos y los modelos de regresión, respectivamente.
+4. **`pipeline.ipynb`**:
+   - Transforms `.parquet` datasets into suitable formats for regression modeling.
 
-### Modelos de series temporales autorregresivas
+**Subfolders**:
+- **`series-temporales`**: Contains notebooks for time series modeling:
+  - **`series_temporales_granularidad.ipynb`**: Analyzes optimal temporal granularity (daily, monthly, annual).
+  - **`series_temporales_Price.ipynb`**: Builds SARIMA models to capture trends and seasonal effects in housing prices.
 
-En la carpeta *series-temporales* se tienen dos notebooks. Siguiendo el orden que marca el análisis realizado, el primero en visualizarse debe ser el de **series_temporales_granularidad.ipynb**, en el que se analiza la granularidad temporal óptima con la que trabajar. Después, se utiliza **series_temporales_Price.ipynb** para analizar el modelo óptimo.
+- **`wsl-models`**: Includes notebooks leveraging RAPIDS on GPU for faster regression model training.
 
-### Modelos de regresión
+### **R**
+The R scripts generate final visualizations for the thesis report:
+- **`Quarto-Markdown`**: Contains the R Markdown file for creating graphs shown in the thesis.
+- **`funciones_auxiliares.R`**: Auxiliary R functions for data handling.
+- **`pickle_to_R.ipynb`**: Converts Python Pickle files into R-readable formats.
 
-En la carpeta *wsl-models* se tiene un único notebook en el que se trabaja con la librería RAPIDs para construir los modelos usando la GPU para acelerar el proceso. No obstante, la versión utilizada no está disponible en *Windows*, aunque se puede hacer una instalación de *Linux* con *WSL*.
+---
 
-## Indicaciones de la carpeta "R"
+## 📈 Project Overview
 
-En el archivo *Quarto-Markdown* en la carpeta *R* se construyen las gráficas mostradas en el documento PDF del proyecto. Además, se tiene un script con funciones auxiliares (**funciones_auxiliares.R**) y un notebook de *Jupyter* para transformar algunos de los datos almacenados con la función *Pickle* de *Python* a un formato legible por *R*.
+### 🔍 Objective
+The project aims to:
+- Predict housing prices based on location and features.
+- Identify key factors influencing price trends.
+- Forecast regional price trends to guide investment decisions.
+
+### 💡 Highlights
+1. **Regression Models**:
+   - Employed **XGBoost** for accurate price predictions.
+   - Achieved a **Coefficient of Determination ($R^2$)** of **0.83** and a **Mean Squared Error (MSE)** of **0.20** for district-level predictions.
+
+2. **Time Series Analysis**:
+   - Built **SARIMA models** to predict long-term price trends.
+   - Identified annual and weekly seasonality patterns in the data.
+
+3. **Geospatial Features**:
+   - Enriched datasets with proximity metrics (e.g., distance to London) and clustering-based regional attributes.
